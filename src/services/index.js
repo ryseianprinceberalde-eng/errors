@@ -7,6 +7,7 @@ export { weatherService as default, weatherService } from './weatherService.js';
 // Individual API services (for direct access if needed)
 export { default as DisasterTrackingService } from './api/disasterTrackingService.js';
 export { default as MeteomaticsService } from './api/meteomaticsService.js';
+export { default as Oco2Service } from './api/oco2Service.js';
 export { default as BaseApiService } from './api/baseApiService.js';
 
 // Utility functions

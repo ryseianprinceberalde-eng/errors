@@ -26,6 +26,12 @@ const LandingPage = () => {
               Storm Tracker
             </button>
             <button 
+              onClick={() => navigate('/co2-monitor')}
+              className="btn-secondary"
+            >
+              CO₂ Monitor
+            </button>
+            <button 
               onClick={handleGetStarted}
               className="btn-primary"
             >

@@ -1,5 +1,6 @@
 import DisasterTrackingService from './api/disasterTrackingService.js';
 import MeteomaticsService from './api/meteomaticsService.js';
+import Oco2Service from './api/oco2Service.js';
 import { processHistoricalData, mergeDataSources, validateDataIntegrity } from './utils/dataProcessor.js';
 
 /**
@@ -11,10 +12,12 @@ class WeatherService {
     // Initialize individual service modules
     this.disasterTrackingService = new DisasterTrackingService();
     this.meteomaticsService = new MeteomaticsService();
+    this.oco2Service = new Oco2Service();
     
     // Service configuration
     this.config = {
       enableDisasterTracking: true,
+      enableCo2Monitoring: true,
       defaultDayRange: 7,
       maxRetries: 3
     };
@@ -39,13 +42,27 @@ class WeatherService {
       // Fetch data from NASA-approved Meteomatics API
       const weatherData = await this.meteomaticsService.fetchWeatherData(lat, lon, targetDate);
 
+      // Fetch OCO-2 CO2 data if enabled
+      let co2Data = null;
+      if (this.config.enableCo2Monitoring) {
+        co2Data = await this.oco2Service.fetchCo2Data({
+          latMin: lat - 5,
+          latMax: lat + 5,
+          lonMin: lon - 5,
+          lonMax: lon + 5,
+          startTime: targetDate,
+          endTime: targetDate
+        });
+      }
+
       // Process historical weather data
       const processedWeatherData = processHistoricalData(weatherData.daily, weatherData.monthly);
       
       // Merge data sources
       const mergedData = mergeDataSources(
         { ...weatherData, ...processedWeatherData },
-        null
+        null,
+        co2Data
       );
 
       // Validate data integrity
@@ -86,6 +103,25 @@ class WeatherService {
     }
   }
 
+
+  /**
+   * Get atmospheric CO2 data from OCO-2 satellite
+   * @param {Object} options - Query options for CO2 data
+   * @returns {Promise<Object>} CO2 data and analysis
+   */
+  async getCo2Data(options = {}) {
+    try {
+      if (!this.config.enableCo2Monitoring) {
+        console.log('CO2 monitoring is disabled');
+        return null;
+      }
+
+      return await this.oco2Service.fetchCo2Data(options);
+    } catch (error) {
+      console.error('Error fetching CO2 data:', error);
+      return null;
+    }
+  }
 
   /**
    * Filter disaster events by criteria
@@ -148,6 +184,12 @@ class WeatherService {
           service: 'NASA EONET Disaster Tracking (Thunderstorms)',
           enabled: this.config.enableDisasterTracking,
           baseUrl: this.disasterTrackingService.baseUrl
+        },
+        oco2: {
+          service: 'NASA OCO-2 Atmospheric CO2 Monitoring',
+          enabled: this.config.enableCo2Monitoring,
+          baseUrl: this.oco2Service.baseUrl,
+          dataset: 'OCO2_L2_Standard.11r'
         }
       },
       configuration: this.config,
@@ -189,6 +231,15 @@ class WeatherService {
         health.services.disasterTracking = { status: 'healthy', message: 'Service operational' };
       } catch (error) {
         health.services.disasterTracking = { status: 'unhealthy', message: error.message };
+        health.overall = 'degraded';
+      }
+
+      // Check OCO-2 service
+      try {
+        const testCo2 = this.oco2Service.getServiceStatus();
+        health.services.oco2 = { status: 'healthy', message: 'Service operational' };
+      } catch (error) {
+        health.services.oco2 = { status: 'unhealthy', message: error.message };
         health.overall = 'degraded';
       }
 
